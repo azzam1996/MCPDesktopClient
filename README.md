@@ -13,5 +13,5 @@ A desktop application built with [Compose Multiplatform](https://www.jetbrains.c
 
 # Video
 
-https://github.com/user-attachments/assets/201e8083-6d2f-41de-8b4d-f4436bbc842d
+https://github.com/user-attachments/assets/4f6b3f8b-943f-4e9c-83a0-0fc39a1fee4b
 
