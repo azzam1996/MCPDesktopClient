@@ -1,55 +1,73 @@
 import androidx.compose.desktop.ui.tooling.preview.Preview
-import androidx.compose.material.Button
 import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.application
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import presentation.ChatMessageModel
-import presentation.ChatScreen
-import presentation.ChatState
+import mcp.MCPClient
+import presentation.chat.ChatMessageModel
+import presentation.chat.ChatScreen
+import presentation.chat.ChatState
+import utils.GAMES_SERVER_URL
+import utils.WEATHER_SERVER_URL
+import java.awt.Dimension
 
 @Composable
 @Preview
 fun App() {
-    var text by remember { mutableStateOf("Hello, World!") }
 
-    val  scope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
     var chatState by remember {
         mutableStateOf(ChatState())
     }
+    val mcpClient by remember {
+        mutableStateOf(MCPClient())
+    }
+
+    LaunchedEffect(true) {
+        mcpClient.connectToServer(
+            WEATHER_SERVER_URL,
+            mcpClient.mcpWeather
+        )
+        mcpClient.connectToServer(
+            GAMES_SERVER_URL,
+            mcpClient.mcpGames
+        )
+    }
     MaterialTheme {
-
-
         ChatScreen(
             state = chatState,
-            onDisconnect = {},
             onSendMessage = { sendMessage ->
-                scope.launch {
-                    chatState = chatState.copy(messages =  chatState.messages + ChatMessageModel(sendMessage,true))
-                    val mcpClient = MCPClient()
-                    mcpClient.connectToServer("E:/intellijProjects/NewServer/weather-stdio-server/build/libs/weather-stdio-server-0.1.0-all.jar")
+                scope.launch(Dispatchers.IO) {
+                    chatState = chatState.copy(
+                        messages = chatState.messages + ChatMessageModel(sendMessage, true),
+                        isLoading = true
+                    )
+
                     val response = mcpClient.processQuery(sendMessage)
-                    chatState = chatState.copy(messages =  chatState.messages + ChatMessageModel(response,false))
+
+                    chatState = chatState.copy(
+                        messages = chatState.messages + ChatMessageModel(response, false),
+                        isLoading = false
+                    )
                 }
             }
         )
-//        Button(onClick = {
-//            scope.launch {
-//                val mcpClient = MCPClient()
-//                mcpClient.connectToServer("E:/intellijProjects/NewServer/weather-stdio-server/build/libs/weather-stdio-server-0.1.0-all.jar")
-//                println(mcpClient.processQuery("alerts in TX"))
-//            }
-//
-//        }) {
-//            Text(text)
-//        }
     }
 }
 
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication) {
+    val state = rememberWindowState(
+        placement = WindowPlacement.Maximized,
+        position = WindowPosition(0.dp, 0.dp),
+    )
+    Window(
+        title = "MCP Client App",
+        state = state,
+        onCloseRequest = ::exitApplication
+    ) {
+        this.window.minimumSize = Dimension(1000, 600)
         App()
     }
 }

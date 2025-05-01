@@ -1,3 +1,5 @@
+package mcp
+
 import com.anthropic.client.okhttp.AnthropicOkHttpClient
 import com.anthropic.core.JsonValue
 import com.anthropic.models.messages.*
@@ -20,14 +22,15 @@ class MCPClient : AutoCloseable {
     private val anthropic = AnthropicOkHttpClient.fromEnv()
 
     // Initialize MCP client
-    private val mcp: Client = Client(clientInfo = Implementation(name = "weather", version = "1.0.0"))
+    val mcpWeather: Client = Client(clientInfo = Implementation(name = "weather", version = "1.0.0"))
+    val mcpGames: Client = Client(clientInfo = Implementation(name = "Games", version = "1.0.0"))
 
     private val messageParamsBuilder: MessageCreateParams.Builder = MessageCreateParams.builder()
         .model(Model.CLAUDE_3_5_SONNET_20241022)
         .maxTokens(1024)
 
     // List of tools offered by the server
-    private lateinit var tools: List<ToolUnion>
+    private val tools =  mutableListOf<ToolUnion>()
 
     private fun JsonObject.toJsonValue(): JsonValue {
         val mapper = ObjectMapper()
@@ -36,7 +39,7 @@ class MCPClient : AutoCloseable {
     }
 
     // Connect to the server using the path to the server
-    suspend fun connectToServer(serverScriptPath: String) {
+    suspend fun connectToServer(serverScriptPath: String, client: Client) {
         try {
             // Build the command based on the file extension of the server script
             val command = buildList {
@@ -59,11 +62,11 @@ class MCPClient : AutoCloseable {
             )
 
             // Connect the MCP client to the server using the transport
-            mcp.connect(transport)
+            client.connect(transport)
 
             // Request the list of available tools from the server
-            val toolsResult = mcp.listTools()
-            tools = toolsResult?.tools?.map { tool ->
+            val toolsResult = client.listTools()
+            tools.addAll( toolsResult?.tools?.map { tool ->
                 ToolUnion.ofTool(
                     Tool.builder()
                         .name(tool.name)
@@ -77,7 +80,7 @@ class MCPClient : AutoCloseable {
                         )
                         .build()
                 )
-            } ?: emptyList()
+            } ?: emptyList())
             println("Connected to server with tools: ${tools.joinToString(", ") { it.tool().get().name() }}")
         } catch (e: Exception) {
             println("Failed to connect to MCP server: $e")
@@ -115,7 +118,19 @@ class MCPClient : AutoCloseable {
                     val toolArgs =
                         content.toolUse().get()._input().convert(object : TypeReference<Map<String, JsonValue>>() {})
                     // Call the tool with provided arguments
-                    val result = mcp.callTool(
+
+                    var client: Client = mcpWeather
+                    when(toolName) {
+                        in mcpWeather.listTools()?.tools?.map { it.name } ?: emptyList() -> {
+                            client = mcpWeather
+                            println("Calling $toolName from Weather")
+                        }
+                        in mcpGames.listTools()?.tools?.map { it.name }  ?: emptyList() -> {
+                            client = mcpGames
+                            println("Calling $toolName from Games")
+                        }
+                    }
+                    val result = client.callTool(
                         name = toolName,
                         arguments = toolArgs ?: emptyMap()
                     )
@@ -167,7 +182,8 @@ class MCPClient : AutoCloseable {
 
     override fun close() {
         runBlocking {
-            mcp.close()
+            mcpWeather.close()
+            mcpGames.close()
             anthropic.close()
         }
     }
